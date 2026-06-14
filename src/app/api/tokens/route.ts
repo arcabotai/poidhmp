@@ -27,6 +27,8 @@ type MarketplaceToken = IndexerClaim & {
   cachedImageUrl?: string;
   explorerUrl: string;
   openseaUrl?: string;
+  mintStatus: 'minted' | 'indexed-only' | 'unknown';
+  mintedOwner?: string;
 };
 
 type ImageManifest = {
@@ -34,6 +36,15 @@ type ImageManifest = {
   totalCached?: number;
   totalFailed?: number;
   images?: Record<string, { url?: string }>;
+};
+
+type MintStatusManifest = {
+  generatedAt?: string;
+  totalChecked?: number;
+  totalMinted?: number;
+  totalIndexedOnly?: number;
+  totalUnknown?: number;
+  records?: Record<string, { status?: 'minted' | 'indexed-only' | 'unknown'; owner?: string; error?: string }>;
 };
 
 async function fetchImageManifest(): Promise<ImageManifest | null> {
@@ -52,7 +63,24 @@ async function fetchImageManifest(): Promise<ImageManifest | null> {
   }
 }
 
-async function fetchChainClaims(chainKey: PoidhChainKey, manifest: ImageManifest | null): Promise<MarketplaceToken[]> {
+
+async function fetchMintStatusManifest(): Promise<MintStatusManifest | null> {
+  const baseUrl = process.env.R2_PUBLIC_BASE_URL?.replace(/\/$/, '');
+  if (!baseUrl) return null;
+
+  try {
+    const response = await fetch(`${baseUrl}/poidh/v1/mint-status.json`, {
+      headers: { accept: 'application/json', 'user-agent': 'poidhmp/0.4' },
+      next: { revalidate },
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as MintStatusManifest;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchChainClaims(chainKey: PoidhChainKey, manifest: ImageManifest | null, mintManifest: MintStatusManifest | null): Promise<MarketplaceToken[]> {
   const chain = POIDH_CHAINS[chainKey];
   const response = await fetch(`${INDEXER_BASE_URL}/claim/${chain.chainId}`, {
     headers: { accept: 'application/json', 'user-agent': 'poidhmp/0.2' },
@@ -68,12 +96,15 @@ async function fetchChainClaims(chainKey: PoidhChainKey, manifest: ImageManifest
   return claims.map((claim) => {
     const tokenId = String(claim.onChainId);
     const cachedImageUrl = manifest?.images?.[`${claim.chainId}:${tokenId}`]?.url;
+    const mintRecord = mintManifest?.records?.[`${claim.chainId}:${tokenId}`];
     return {
       ...claim,
       chainKey,
       chainName: chain.shortName,
       tokenId,
       cachedImageUrl,
+      mintStatus: mintRecord?.status ?? 'unknown',
+      mintedOwner: mintRecord?.owner,
       explorerUrl: explorerAddressUrl(chain),
     };
   });
@@ -98,8 +129,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const manifest = await fetchImageManifest();
-    const settled = await Promise.allSettled(selectedChains.map((key) => fetchChainClaims(key, manifest)));
+    const [manifest, mintManifest] = await Promise.all([fetchImageManifest(), fetchMintStatusManifest()]);
+    const settled = await Promise.allSettled(selectedChains.map((key) => fetchChainClaims(key, manifest, mintManifest)));
     const tokens = settled.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
     const errors = settled.flatMap((result, index) =>
       result.status === 'rejected'
@@ -125,6 +156,9 @@ export async function GET(request: Request) {
       countsByChain,
       imageCache: manifest
         ? { enabled: true, generatedAt: manifest.generatedAt, totalCached: manifest.totalCached, totalFailed: manifest.totalFailed }
+        : { enabled: false },
+      mintStatusCache: mintManifest
+        ? { enabled: true, generatedAt: mintManifest.generatedAt, totalChecked: mintManifest.totalChecked, totalMinted: mintManifest.totalMinted, totalIndexedOnly: mintManifest.totalIndexedOnly, totalUnknown: mintManifest.totalUnknown }
         : { enabled: false },
       errors,
       tokens: filtered,

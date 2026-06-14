@@ -81,6 +81,9 @@ select, input { width: 100%; border: 1px solid var(--line); background: rgba(0,0
 .status.voting { color:#d9ccff; background:rgba(168,85,247,.1); border-color:rgba(168,85,247,.28); }
 .cardFacts { display:flex; flex-wrap:wrap; gap: 6px; margin: 10px 0 4px; }
 .cardFacts span { border: 1px solid rgba(255,255,255,.08); color: #c9dfdc; background: rgba(0,0,0,.18); border-radius:999px; padding: 6px 8px; font-size: 11px; }
+.cardFacts .mintBadge.minted { color:#b9fff2; background:rgba(95,255,224,.1); border-color:rgba(95,255,224,.28); }
+.cardFacts .mintBadge.indexed-only { color:#f9dab0; background:rgba(216,167,93,.1); border-color:rgba(216,167,93,.28); }
+.cardFacts .mintBadge.unknown { color:#d4dce0; background:rgba(255,255,255,.055); border-color:rgba(255,255,255,.12); }
 .miniKv { display:flex; justify-content:space-between; gap:12px; color: var(--muted); font-size: 13px; border-top:1px solid rgba(255,255,255,.07); padding-top:10px; }
 .miniKv:first-of-type { margin-top:auto; }
 .loadMore { display:flex; justify-content:center; margin-top:18px; }

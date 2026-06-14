@@ -34,6 +34,8 @@ type MarketplaceToken = {
   bountyId: number;
   owner: string;
   cachedImageUrl?: string;
+  mintStatus: 'minted' | 'indexed-only' | 'unknown';
+  mintedOwner?: string;
   explorerUrl: string;
   openseaUrl?: string;
 };
@@ -46,6 +48,7 @@ type TokensResponse = {
   countsByChain: Record<string, number>;
   imageCache?: { enabled: boolean; generatedAt?: string; totalCached?: number; totalFailed?: number };
   errors: { chain: string; error: string }[];
+  mintStatusCache?: { enabled: boolean; generatedAt?: string; totalChecked?: number; totalMinted?: number; totalIndexedOnly?: number; totalUnknown?: number };
   tokens: MarketplaceToken[];
 };
 
@@ -70,6 +73,13 @@ const mediaLabels = {
   missing: 'No media URL',
 } as const;
 
+const mintLabels = {
+  all: 'All records',
+  minted: 'Minted NFTs',
+  indexed: 'Indexed claims only',
+  unknown: 'Mint status unknown',
+} as const;
+
 const sortLabels = {
   newest: 'Best media + newest',
   oldest: 'Oldest token ID',
@@ -84,6 +94,7 @@ const sortLabels = {
 
 type StatusFilter = keyof typeof statusLabels;
 type MediaFilter = keyof typeof mediaLabels;
+type MintFilter = keyof typeof mintLabels;
 type SortMode = keyof typeof sortLabels;
 
 function hasUsableMediaUrl(token: MarketplaceToken) {
@@ -110,6 +121,7 @@ export default function Home() {
   const [marketChain, setMarketChain] = useState<'all' | PoidhChainKey>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
+  const [mintFilter, setMintFilter] = useState<MintFilter>('all');
   const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [query, setQuery] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('');
@@ -153,6 +165,9 @@ export default function Home() {
       cached: tokens.filter((token) => token.cachedImageUrl).length,
       fallback: tokens.filter((token) => !token.cachedImageUrl && hasUsableMediaUrl(token)).length,
       missing: tokens.filter((token) => !hasUsableMediaUrl(token)).length,
+      minted: tokens.filter((token) => token.mintStatus === 'minted').length,
+      indexedOnly: tokens.filter((token) => token.mintStatus === 'indexed-only').length,
+      unknownMint: tokens.filter((token) => token.mintStatus === 'unknown').length,
       owners: new Set(tokens.map((token) => token.owner?.toLowerCase()).filter(Boolean)).size,
       issuers: new Set(tokens.map((token) => token.issuer?.toLowerCase()).filter(Boolean)).size,
       bounties: new Set(tokens.map((token) => `${token.chainId}:${token.bountyId}`)).size,
@@ -175,6 +190,9 @@ export default function Home() {
       if (mediaFilter === 'cached' && !token.cachedImageUrl) return false;
       if (mediaFilter === 'fallback' && (token.cachedImageUrl || !hasUsableMediaUrl(token))) return false;
       if (mediaFilter === 'missing' && hasUsableMediaUrl(token)) return false;
+      if (mintFilter === 'minted' && token.mintStatus !== 'minted') return false;
+      if (mintFilter === 'indexed' && token.mintStatus !== 'indexed-only') return false;
+      if (mintFilter === 'unknown' && token.mintStatus !== 'unknown') return false;
       if (owner && !token.owner?.toLowerCase().includes(owner)) return false;
       if (issuer && !token.issuer?.toLowerCase().includes(issuer)) return false;
       if (bounty && String(token.bountyId) !== bounty) return false;
@@ -209,12 +227,13 @@ export default function Home() {
           return b.onChainId - a.onChainId;
       }
     });
-  }, [bountyFilter, issuerFilter, marketChain, mediaFilter, ownerFilter, query, sortMode, statusFilter, tokenMax, tokenMin, tokensData]);
+  }, [bountyFilter, issuerFilter, marketChain, mediaFilter, mintFilter, ownerFilter, query, sortMode, statusFilter, tokenMax, tokenMin, tokensData]);
 
   function clearMarketFilters() {
     setMarketChain('all');
     setStatusFilter('all');
     setMediaFilter('all');
+    setMintFilter('all');
     setSortMode('newest');
     setQuery('');
     setOwnerFilter('');
@@ -317,8 +336,8 @@ export default function Home() {
           <button className="statChip" type="button" onClick={() => { setStatusFilter('accepted'); resetVisible(); }}><b>{marketStats.accepted.toLocaleString()}</b><span>accepted</span></button>
           <button className="statChip" type="button" onClick={() => { setStatusFilter('escrow'); resetVisible(); }}><b>{marketStats.escrow.toLocaleString()}</b><span>escrow</span></button>
           <button className="statChip" type="button" onClick={() => { setStatusFilter('voting'); resetVisible(); }}><b>{marketStats.voting.toLocaleString()}</b><span>voting</span></button>
-          <button className="statChip" type="button" onClick={() => { setMediaFilter('cached'); resetVisible(); }}><b>{marketStats.cached.toLocaleString()}</b><span>R2 cached</span></button>
-          <button className="statChip" type="button" onClick={() => { setMediaFilter('missing'); resetVisible(); }}><b>{marketStats.missing.toLocaleString()}</b><span>no media</span></button>
+          <button className="statChip" type="button" onClick={() => { setMintFilter('minted'); resetVisible(); }}><b>{marketStats.minted.toLocaleString()}</b><span>minted NFTs</span></button>
+          <button className="statChip" type="button" onClick={() => { setMintFilter('indexed'); resetVisible(); }}><b>{marketStats.indexedOnly.toLocaleString()}</b><span>indexed only</span></button>
         </div>
 
         <div className="card filters advancedFilters">
@@ -343,6 +362,12 @@ export default function Home() {
             <label>Media</label>
             <select value={mediaFilter} onChange={(e) => { setMediaFilter(e.target.value as MediaFilter); resetVisible(); }}>
               {Object.entries(mediaLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </div>
+          <div className="filterField">
+            <label>NFT status</label>
+            <select value={mintFilter} onChange={(e) => { setMintFilter(e.target.value as MintFilter); resetVisible(); }}>
+              {Object.entries(mintLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </div>
           <div className="filterField">
@@ -403,6 +428,7 @@ export default function Home() {
                 <p className="muted">{token.description || 'No description.'}</p>
                 <div className="cardFacts">
                   <span>bounty #{token.bountyId}</span>
+                  <span className={`mintBadge ${token.mintStatus}`}>{token.mintStatus === 'minted' ? 'minted NFT' : token.mintStatus === 'indexed-only' ? 'indexed claim' : 'mint unknown'}</span>
                   <span>{token.cachedImageUrl ? 'R2 media' : hasUsableMediaUrl(token) ? 'live media' : 'no media'}</span>
                 </div>
                 <div className="miniKv"><span>Owner</span><span>{compactAddress(token.owner)}</span></div>
