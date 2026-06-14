@@ -56,6 +56,21 @@ select, input { width: 100%; border: 1px solid var(--line); background: rgba(0,0
 .kv span:first-child { color: var(--muted); }
 .notice { padding: 16px 18px; border-radius: 18px; background: rgba(216,167,93,.08); border: 1px solid rgba(216,167,93,.24); color: #f6dfb8; }
 .error { color: #ffd3d3; background: rgba(255,107,107,.1); border-color: rgba(255,107,107,.26); }
+.filters { padding: 14px; display:grid; grid-template-columns: 190px 210px 1fr auto; gap: 10px; align-items:center; }
+.nftGrid { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.nftCard { overflow:hidden; display:flex; flex-direction:column; min-height: 430px; }
+.thumb { height: 210px; background: rgba(0,0,0,.3); display:flex; align-items:center; justify-content:center; border-bottom: 1px solid rgba(255,255,255,.08); }
+.thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.nftBody { padding: 14px; display:flex; flex-direction:column; flex:1; }
+.nftBody h3 { margin: 12px 0 8px; font-size: 20px; line-height: 1.08; letter-spacing: -.03em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.nftBody p { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 4.5em; }
+.nftMeta { display:flex; justify-content:space-between; gap:8px; align-items:center; }
+.status { border-radius:999px; padding: 7px 9px; font-size: 11px; text-transform:uppercase; letter-spacing:.08em; border:1px solid rgba(255,255,255,.1); }
+.status.accepted { color:#b9fff2; background:rgba(95,255,224,.08); border-color:rgba(95,255,224,.22); }
+.status.escrow { color:#f9dab0; background:rgba(216,167,93,.08); border-color:rgba(216,167,93,.22); }
+.miniKv { display:flex; justify-content:space-between; gap:12px; color: var(--muted); font-size: 13px; border-top:1px solid rgba(255,255,255,.07); padding-top:10px; margin-top:auto; }
+.loadMore { display:flex; justify-content:center; margin-top:18px; }
 .footer { margin-top: 32px; color: var(--muted); font-size: 13px; text-align:center; }
-@media (max-width: 900px) { .hero, .result { grid-template-columns: 1fr; } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lookup { grid-template-columns: 1fr; } }
-@media (max-width: 560px) { .grid, .formRow { grid-template-columns: 1fr; } .heroMain { padding: 24px; } .container { padding: 18px 12px 42px; } }
+@media (max-width: 1100px) { .nftGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .hero, .result { grid-template-columns: 1fr; } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lookup { grid-template-columns: 1fr; } .nftGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .grid, .formRow, .filters, .nftGrid { grid-template-columns: 1fr; } .heroMain { padding: 24px; } .container { padding: 18px 12px 42px; } .thumb { height: 240px; } }

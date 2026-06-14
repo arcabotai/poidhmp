@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { CHAIN_ORDER, POIDH_CHAINS, PoidhChainKey, explorerAddressUrl, explorerTokenUrl, openseaAssetUrl } from '@/lib/chains';
 import { compactAddress } from '@/lib/uri';
 
@@ -18,12 +18,49 @@ type LookupResult = {
   links: { explorerCollection: string; explorerToken: string; opensea?: string };
 };
 
+type MarketplaceToken = {
+  id: number;
+  chainId: number;
+  chainKey: PoidhChainKey;
+  chainName: string;
+  onChainId: number;
+  tokenId: string;
+  title: string;
+  description: string;
+  url: string | null;
+  issuer: string;
+  isAccepted: boolean;
+  isVoting: boolean;
+  bountyId: number;
+  owner: string;
+  explorerUrl: string;
+  openseaUrl?: string;
+};
+
+type TokensResponse = {
+  source: string;
+  fetchedAt: string;
+  total: number;
+  totalUnfiltered: number;
+  countsByChain: Record<string, number>;
+  errors: { chain: string; error: string }[];
+  tokens: MarketplaceToken[];
+};
+
 const featuredIds: Record<PoidhChainKey, string[]> = {
   base: ['987', '1000', '1200'],
   arbitrum: ['181', '200', '250'],
   ethereum: ['1', '2', '10'],
   degen: ['1198', '1250', '1500'],
 };
+
+const statusLabels = {
+  all: 'All NFTs',
+  accepted: 'Accepted / owned',
+  escrow: 'In escrow / unaccepted',
+} as const;
+
+type StatusFilter = keyof typeof statusLabels;
 
 export default function Home() {
   const [chainKey, setChainKey] = useState<PoidhChainKey>('base');
@@ -32,8 +69,49 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const [tokensData, setTokensData] = useState<TokensResponse | null>(null);
+  const [tokensError, setTokensError] = useState<string | null>(null);
+  const [tokensLoading, setTokensLoading] = useState(true);
+  const [marketChain, setMarketChain] = useState<'all' | PoidhChainKey>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [query, setQuery] = useState('');
+  const [visibleCount, setVisibleCount] = useState(72);
+
   const chain = POIDH_CHAINS[chainKey];
   const quickIds = useMemo(() => featuredIds[chainKey], [chainKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadTokens() {
+      setTokensLoading(true);
+      setTokensError(null);
+      try {
+        const response = await fetch('/api/tokens');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch marketplace tokens');
+        if (!cancelled) setTokensData(data as TokensResponse);
+      } catch (err) {
+        if (!cancelled) setTokensError(err instanceof Error ? err.message : 'Failed to fetch marketplace tokens');
+      } finally {
+        if (!cancelled) setTokensLoading(false);
+      }
+    }
+    loadTokens();
+    return () => { cancelled = true; };
+  }, []);
+
+  const filteredTokens = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (tokensData?.tokens ?? []).filter((token) => {
+      if (marketChain !== 'all' && token.chainKey !== marketChain) return false;
+      if (statusFilter === 'accepted' && !token.isAccepted) return false;
+      if (statusFilter === 'escrow' && token.isAccepted) return false;
+      if (!q) return true;
+      return [token.title, token.description, token.tokenId, token.owner, token.issuer, token.chainName]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q));
+    });
+  }, [marketChain, query, statusFilter, tokensData]);
 
   async function lookup(event?: FormEvent) {
     event?.preventDefault();
@@ -52,6 +130,15 @@ export default function Home() {
     }
   }
 
+  function inspectToken(token: MarketplaceToken) {
+    setChainKey(token.chainKey);
+    setTokenId(token.tokenId);
+    setTimeout(() => document.getElementById('lookup')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 20);
+  }
+
+  const loadedTotal = tokensData?.total ?? 0;
+  const acceptedTotal = tokensData?.tokens.filter((token) => token.isAccepted).length ?? 0;
+
   return (
     <main className="container">
       <section className="hero">
@@ -59,20 +146,20 @@ export default function Home() {
           <div className="kicker">poidh marketplace / claim NFT discovery</div>
           <h1>pics sold, or it didn’t happen.</h1>
           <p className="subtitle">
-            A clean market surface for POIDH v3 claim NFTs across Ethereum, Arbitrum, Base, and Degen Chain. First version: browse contracts, inspect tokens, jump to live market/explorer pages. Native listing contract comes after the safe discovery layer.
+            A clean market surface for POIDH v3 claim NFTs. Now backed by Kenny’s official indexer at indexer.poidh.xyz, not random RPC archaeology.
           </p>
           <div className="nav">
-            <a className="button primary" href="#lookup">Look up NFT</a>
-            <a className="button" href="https://poidh.xyz" target="_blank" rel="noreferrer">Open poidh.xyz</a>
-            <span className="pill">4 chains</span>
-            <span className="pill">v3 claim NFTs</span>
+            <a className="button primary" href="#market">Browse NFTs</a>
+            <a className="button" href="#lookup">Look up NFT</a>
+            <a className="button" href="https://indexer.poidh.xyz/swagger" target="_blank" rel="noreferrer">Indexer API</a>
+            <span className="pill">{tokensLoading ? 'loading…' : `${loadedTotal.toLocaleString()} indexed NFTs`}</span>
           </div>
         </div>
         <aside className="card side">
-          <div className="stat"><b>4</b><span>canonical NFT contracts</span></div>
-          <div className="stat"><b>0</b><span>core bounty flow changes</span></div>
-          <div className="stat"><b>v0</b><span>discovery first, escrow later</span></div>
-          <div className="notice">This MVP does not custody funds or NFTs. It reads live contracts and links out. Boring, safe, useful.</div>
+          <div className="stat"><b>{tokensLoading ? '…' : loadedTotal.toLocaleString()}</b><span>claim NFTs from official indexer</span></div>
+          <div className="stat"><b>{tokensLoading ? '…' : acceptedTotal.toLocaleString()}</b><span>accepted / user-owned claims</span></div>
+          <div className="stat"><b>4</b><span>chains indexed</span></div>
+          <div className="notice">Still no custody and no fake listings. This is the real inventory layer before native sales.</div>
         </aside>
       </section>
 
@@ -82,7 +169,7 @@ export default function Home() {
             <div className="kicker">canonical contracts</div>
             <h2>Claim NFT collections</h2>
           </div>
-          <p className="muted">Confirmed by Kenny + matched in POIDH app config.</p>
+          <p className="muted">Contracts confirmed by Kenny. NFT inventory fetched from `https://indexer.poidh.xyz/claim/:chainId`.</p>
         </div>
         <div className="grid">
           {CHAIN_ORDER.map((key) => {
@@ -92,7 +179,7 @@ export default function Home() {
                 <div className="chainTop">
                   <span className="pill">{item.currency} · {item.chainId}</span>
                   <h3>{item.shortName}</h3>
-                  <p className="muted">POIDH v3 claim NFT contract</p>
+                  <p className="muted">{tokensData?.countsByChain?.[key]?.toLocaleString() ?? '—'} indexed claims</p>
                   <div className="code">{item.nftAddress}</div>
                 </div>
                 <div className="links">
@@ -103,6 +190,58 @@ export default function Home() {
             );
           })}
         </div>
+      </section>
+
+      <section className="section" id="market">
+        <div className="sectionHead">
+          <div>
+            <div className="kicker">official indexer inventory</div>
+            <h2>Browse all POIDH NFTs</h2>
+          </div>
+          <p className="muted">Loaded from Railway-hosted POIDH indexer. Cached for 5 minutes by POIDHMP.</p>
+        </div>
+        <div className="card filters">
+          <select value={marketChain} onChange={(e) => { setMarketChain(e.target.value as 'all' | PoidhChainKey); setVisibleCount(72); }}>
+            <option value="all">All chains</option>
+            {CHAIN_ORDER.map((key) => <option key={key} value={key}>{POIDH_CHAINS[key].name}</option>)}
+          </select>
+          <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setVisibleCount(72); }}>
+            {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+          <input value={query} onChange={(e) => { setQuery(e.target.value); setVisibleCount(72); }} placeholder="Search title, owner, token ID…" />
+          <span className="pill">{filteredTokens.length.toLocaleString()} shown</span>
+        </div>
+        {tokensError ? <div className="notice error" style={{ marginTop: 14 }}>{tokensError}</div> : null}
+        {tokensData?.errors?.length ? <div className="notice" style={{ marginTop: 14 }}>Partial indexer errors: {tokensData.errors.map((e) => `${e.chain}: ${e.error}`).join('; ')}</div> : null}
+        {tokensLoading ? <div className="notice" style={{ marginTop: 14 }}>Loading official POIDH indexer inventory…</div> : null}
+        <div className="nftGrid">
+          {filteredTokens.slice(0, visibleCount).map((token) => (
+            <article className="card nftCard" key={`${token.chainKey}-${token.tokenId}`}>
+              <div className="thumb">
+                {token.url ? <img src={token.url} alt={token.title || `POIDH #${token.tokenId}`} loading="lazy" /> : <span className="muted">No image</span>}
+              </div>
+              <div className="nftBody">
+                <div className="nftMeta">
+                  <span className="pill">{token.chainName} #{token.tokenId}</span>
+                  <span className={token.isAccepted ? 'status accepted' : 'status escrow'}>{token.isAccepted ? 'accepted' : 'escrow'}</span>
+                </div>
+                <h3>{token.title || `POIDH claim #${token.tokenId}`}</h3>
+                <p className="muted">{token.description || 'No description.'}</p>
+                <div className="miniKv"><span>Owner</span><span>{compactAddress(token.owner)}</span></div>
+                <div className="links">
+                  <button className="button primary" type="button" onClick={() => inspectToken(token)}>Inspect</button>
+                  <a className="button" href={token.explorerUrl} target="_blank" rel="noreferrer">Explorer</a>
+                  {token.openseaUrl ? <a className="button" href={token.openseaUrl} target="_blank" rel="noreferrer">Market</a> : null}
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+        {filteredTokens.length > visibleCount ? (
+          <div className="loadMore">
+            <button className="button primary" type="button" onClick={() => setVisibleCount((count) => count + 72)}>Load more NFTs</button>
+          </div>
+        ) : null}
       </section>
 
       <section className="section" id="lookup">
@@ -162,11 +301,11 @@ export default function Home() {
         <div className="kicker">next phase</div>
         <h2>Native listings later.</h2>
         <p className="muted">
-          This launch keeps the bounty protocol untouched. The next PR can add a tiny marketplace contract: list, cancel, buy. Until then this site gives POIDH a clean NFT market front door without custody risk.
+          This launch keeps the bounty protocol untouched. The next PR can add a tiny marketplace contract: list, cancel, buy. Until then this site gives POIDH a clean NFT market front door using the official indexer.
         </p>
       </section>
 
-      <footer className="footer">Built by Cad from Arca · POIDH is pics or it didn’t happen · no token, no goblin claims</footer>
+      <footer className="footer">Built by Cad from Arca · data from indexer.poidh.xyz · no token, no goblin claims</footer>
     </main>
   );
 }
