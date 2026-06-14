@@ -71,7 +71,7 @@ const mediaLabels = {
 } as const;
 
 const sortLabels = {
-  newest: 'Newest token ID',
+  newest: 'Best media + newest',
   oldest: 'Oldest token ID',
   tokenAsc: 'Token ID low → high',
   tokenDesc: 'Token ID high → low',
@@ -85,6 +85,17 @@ const sortLabels = {
 type StatusFilter = keyof typeof statusLabels;
 type MediaFilter = keyof typeof mediaLabels;
 type SortMode = keyof typeof sortLabels;
+
+function hasUsableMediaUrl(token: MarketplaceToken) {
+  if (!token.url) return false;
+  return /^(https?:\/\/|ipfs:\/\/|ar:\/|data:)/i.test(token.url.trim());
+}
+
+function mediaRank(token: MarketplaceToken) {
+  if (token.cachedImageUrl) return 0;
+  if (hasUsableMediaUrl(token)) return 1;
+  return 2;
+}
 
 export default function Home() {
   const [chainKey, setChainKey] = useState<PoidhChainKey>('base');
@@ -140,8 +151,8 @@ export default function Home() {
       escrow: tokens.filter((token) => !token.isAccepted).length,
       voting: tokens.filter((token) => token.isVoting).length,
       cached: tokens.filter((token) => token.cachedImageUrl).length,
-      fallback: tokens.filter((token) => !token.cachedImageUrl && token.url).length,
-      missing: tokens.filter((token) => !token.url).length,
+      fallback: tokens.filter((token) => !token.cachedImageUrl && hasUsableMediaUrl(token)).length,
+      missing: tokens.filter((token) => !hasUsableMediaUrl(token)).length,
       owners: new Set(tokens.map((token) => token.owner?.toLowerCase()).filter(Boolean)).size,
       issuers: new Set(tokens.map((token) => token.issuer?.toLowerCase()).filter(Boolean)).size,
       bounties: new Set(tokens.map((token) => `${token.chainId}:${token.bountyId}`)).size,
@@ -162,8 +173,8 @@ export default function Home() {
       if (statusFilter === 'escrow' && token.isAccepted) return false;
       if (statusFilter === 'voting' && !token.isVoting) return false;
       if (mediaFilter === 'cached' && !token.cachedImageUrl) return false;
-      if (mediaFilter === 'fallback' && (token.cachedImageUrl || !token.url)) return false;
-      if (mediaFilter === 'missing' && token.url) return false;
+      if (mediaFilter === 'fallback' && (token.cachedImageUrl || !hasUsableMediaUrl(token))) return false;
+      if (mediaFilter === 'missing' && hasUsableMediaUrl(token)) return false;
       if (owner && !token.owner?.toLowerCase().includes(owner)) return false;
       if (issuer && !token.issuer?.toLowerCase().includes(issuer)) return false;
       if (bounty && String(token.bountyId) !== bounty) return false;
@@ -181,8 +192,9 @@ export default function Home() {
         case 'tokenAsc':
           return a.onChainId - b.onChainId;
         case 'tokenDesc':
-        case 'newest':
           return b.onChainId - a.onChainId;
+        case 'newest':
+          return mediaRank(a) - mediaRank(b) || b.onChainId - a.onChainId;
         case 'bountyAsc':
           return a.bountyId - b.bountyId || a.onChainId - b.onChainId;
         case 'bountyDesc':
@@ -369,7 +381,7 @@ export default function Home() {
           {filteredTokens.slice(0, visibleCount).map((token) => (
             <article className="card nftCard" key={`${token.chainKey}-${token.tokenId}`}>
               <div className="thumb">
-                {token.cachedImageUrl || token.url ? (
+                {token.cachedImageUrl || hasUsableMediaUrl(token) ? (
                   <img
                     src={token.cachedImageUrl || `/api/media?url=${encodeURIComponent(token.url ?? '')}`}
                     alt={token.title || `POIDH #${token.tokenId}`}
@@ -391,7 +403,7 @@ export default function Home() {
                 <p className="muted">{token.description || 'No description.'}</p>
                 <div className="cardFacts">
                   <span>bounty #{token.bountyId}</span>
-                  <span>{token.cachedImageUrl ? 'R2 media' : token.url ? 'live media' : 'no media'}</span>
+                  <span>{token.cachedImageUrl ? 'R2 media' : hasUsableMediaUrl(token) ? 'live media' : 'no media'}</span>
                 </div>
                 <div className="miniKv"><span>Owner</span><span>{compactAddress(token.owner)}</span></div>
                 <div className="miniKv"><span>Issuer</span><span>{compactAddress(token.issuer)}</span></div>
