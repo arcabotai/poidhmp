@@ -409,8 +409,7 @@ export default function Home() {
                 <div className="miniKv"><span>Issuer</span><span>{compactAddress(token.issuer)}</span></div>
                 <div className="links">
                   <button className="button primary" type="button" onClick={() => inspectToken(token)}>Inspect</button>
-                  <a className="button" href={token.explorerUrl} target="_blank" rel="noreferrer">Explorer</a>
-                  {token.openseaUrl ? <a className="button" href={token.openseaUrl} target="_blank" rel="noreferrer">Market</a> : null}
+                  <a className="button" href={token.explorerUrl} target="_blank" rel="noreferrer">Contract</a>
                 </div>
               </div>
             </article>

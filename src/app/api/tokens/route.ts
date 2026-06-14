@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { CHAIN_ORDER, POIDH_CHAINS, PoidhChainKey, explorerTokenUrl, openseaAssetUrl } from '@/lib/chains';
+import { CHAIN_ORDER, POIDH_CHAINS, PoidhChainKey, explorerAddressUrl } from '@/lib/chains';
 
 export const runtime = 'nodejs';
 export const revalidate = 300;
@@ -74,8 +74,7 @@ async function fetchChainClaims(chainKey: PoidhChainKey, manifest: ImageManifest
       chainName: chain.shortName,
       tokenId,
       cachedImageUrl,
-      explorerUrl: explorerTokenUrl(chain, tokenId),
-      openseaUrl: openseaAssetUrl(chain, tokenId),
+      explorerUrl: explorerAddressUrl(chain),
     };
   });
 }
