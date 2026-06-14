@@ -218,7 +218,7 @@ export default function Home() {
           {filteredTokens.slice(0, visibleCount).map((token) => (
             <article className="card nftCard" key={`${token.chainKey}-${token.tokenId}`}>
               <div className="thumb">
-                {token.url ? <img src={token.url} alt={token.title || `POIDH #${token.tokenId}`} loading="lazy" /> : <span className="muted">No image</span>}
+                {token.url ? <img src={`/api/media?url=${encodeURIComponent(token.url)}`} alt={token.title || `POIDH #${token.tokenId}`} loading="lazy" /> : <span className="muted">No image</span>}
               </div>
               <div className="nftBody">
                 <div className="nftMeta">
