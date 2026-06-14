@@ -44,6 +44,7 @@ type TokensResponse = {
   total: number;
   totalUnfiltered: number;
   countsByChain: Record<string, number>;
+  imageCache?: { enabled: boolean; generatedAt?: string; totalCached?: number; totalFailed?: number };
   errors: { chain: string; error: string }[];
   tokens: MarketplaceToken[];
 };
@@ -56,12 +57,34 @@ const featuredIds: Record<PoidhChainKey, string[]> = {
 };
 
 const statusLabels = {
-  all: 'All NFTs',
+  all: 'All states',
   accepted: 'Accepted / owned',
-  escrow: 'In escrow / unaccepted',
+  escrow: 'Escrow / unaccepted',
+  voting: 'In voting',
+} as const;
+
+const mediaLabels = {
+  all: 'All media',
+  cached: 'Cached on R2',
+  fallback: 'Live resolver fallback',
+  missing: 'No media URL',
+} as const;
+
+const sortLabels = {
+  newest: 'Newest token ID',
+  oldest: 'Oldest token ID',
+  tokenAsc: 'Token ID low → high',
+  tokenDesc: 'Token ID high → low',
+  bountyDesc: 'Bounty ID high → low',
+  bountyAsc: 'Bounty ID low → high',
+  acceptedFirst: 'Accepted first',
+  chain: 'Chain order',
+  title: 'Title A → Z',
 } as const;
 
 type StatusFilter = keyof typeof statusLabels;
+type MediaFilter = keyof typeof mediaLabels;
+type SortMode = keyof typeof sortLabels;
 
 export default function Home() {
   const [chainKey, setChainKey] = useState<PoidhChainKey>('base');
@@ -75,7 +98,14 @@ export default function Home() {
   const [tokensLoading, setTokensLoading] = useState(true);
   const [marketChain, setMarketChain] = useState<'all' | PoidhChainKey>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
+  const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [query, setQuery] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState('');
+  const [issuerFilter, setIssuerFilter] = useState('');
+  const [bountyFilter, setBountyFilter] = useState('');
+  const [tokenMin, setTokenMin] = useState('');
+  const [tokenMax, setTokenMax] = useState('');
   const [visibleCount, setVisibleCount] = useState(36);
 
   const chain = POIDH_CHAINS[chainKey];
@@ -101,18 +131,87 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
+  const resetVisible = () => setVisibleCount(36);
+
+  const marketStats = useMemo(() => {
+    const tokens = tokensData?.tokens ?? [];
+    return {
+      accepted: tokens.filter((token) => token.isAccepted).length,
+      escrow: tokens.filter((token) => !token.isAccepted).length,
+      voting: tokens.filter((token) => token.isVoting).length,
+      cached: tokens.filter((token) => token.cachedImageUrl).length,
+      fallback: tokens.filter((token) => !token.cachedImageUrl && token.url).length,
+      missing: tokens.filter((token) => !token.url).length,
+      owners: new Set(tokens.map((token) => token.owner?.toLowerCase()).filter(Boolean)).size,
+      issuers: new Set(tokens.map((token) => token.issuer?.toLowerCase()).filter(Boolean)).size,
+      bounties: new Set(tokens.map((token) => `${token.chainId}:${token.bountyId}`)).size,
+    };
+  }, [tokensData]);
+
   const filteredTokens = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return (tokensData?.tokens ?? []).filter((token) => {
+    const owner = ownerFilter.trim().toLowerCase();
+    const issuer = issuerFilter.trim().toLowerCase();
+    const bounty = bountyFilter.trim();
+    const min = tokenMin.trim() ? Number(tokenMin) : undefined;
+    const max = tokenMax.trim() ? Number(tokenMax) : undefined;
+
+    const filtered = (tokensData?.tokens ?? []).filter((token) => {
       if (marketChain !== 'all' && token.chainKey !== marketChain) return false;
       if (statusFilter === 'accepted' && !token.isAccepted) return false;
       if (statusFilter === 'escrow' && token.isAccepted) return false;
+      if (statusFilter === 'voting' && !token.isVoting) return false;
+      if (mediaFilter === 'cached' && !token.cachedImageUrl) return false;
+      if (mediaFilter === 'fallback' && (token.cachedImageUrl || !token.url)) return false;
+      if (mediaFilter === 'missing' && token.url) return false;
+      if (owner && !token.owner?.toLowerCase().includes(owner)) return false;
+      if (issuer && !token.issuer?.toLowerCase().includes(issuer)) return false;
+      if (bounty && String(token.bountyId) !== bounty) return false;
+      if (min !== undefined && Number.isFinite(min) && token.onChainId < min) return false;
+      if (max !== undefined && Number.isFinite(max) && token.onChainId > max) return false;
       if (!q) return true;
-      return [token.title, token.description, token.tokenId, token.owner, token.issuer, token.chainName]
+      return [token.title, token.description, token.tokenId, token.owner, token.issuer, token.chainName, token.bountyId, token.chainId]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q));
     });
-  }, [marketChain, query, statusFilter, tokensData]);
+
+    return filtered.sort((a, b) => {
+      switch (sortMode) {
+        case 'oldest':
+        case 'tokenAsc':
+          return a.onChainId - b.onChainId;
+        case 'tokenDesc':
+        case 'newest':
+          return b.onChainId - a.onChainId;
+        case 'bountyAsc':
+          return a.bountyId - b.bountyId || a.onChainId - b.onChainId;
+        case 'bountyDesc':
+          return b.bountyId - a.bountyId || b.onChainId - a.onChainId;
+        case 'acceptedFirst':
+          return Number(b.isAccepted) - Number(a.isAccepted) || b.onChainId - a.onChainId;
+        case 'chain':
+          return CHAIN_ORDER.indexOf(a.chainKey) - CHAIN_ORDER.indexOf(b.chainKey) || b.onChainId - a.onChainId;
+        case 'title':
+          return (a.title || '').localeCompare(b.title || '') || b.onChainId - a.onChainId;
+        default:
+          return b.onChainId - a.onChainId;
+      }
+    });
+  }, [bountyFilter, issuerFilter, marketChain, mediaFilter, ownerFilter, query, sortMode, statusFilter, tokenMax, tokenMin, tokensData]);
+
+  function clearMarketFilters() {
+    setMarketChain('all');
+    setStatusFilter('all');
+    setMediaFilter('all');
+    setSortMode('newest');
+    setQuery('');
+    setOwnerFilter('');
+    setIssuerFilter('');
+    setBountyFilter('');
+    setTokenMin('');
+    setTokenMax('');
+    setVisibleCount(36);
+  }
 
   async function lookup(event?: FormEvent) {
     event?.preventDefault();
@@ -138,7 +237,7 @@ export default function Home() {
   }
 
   const loadedTotal = tokensData?.total ?? 0;
-  const acceptedTotal = tokensData?.tokens.filter((token) => token.isAccepted).length ?? 0;
+  const acceptedTotal = marketStats.accepted;
 
   return (
     <main className="container">
@@ -201,16 +300,67 @@ export default function Home() {
           </div>
           <p className="muted">Loaded from Railway-hosted POIDH indexer. Cached for 5 minutes by POIDHMP.</p>
         </div>
-        <div className="card filters">
-          <select value={marketChain} onChange={(e) => { setMarketChain(e.target.value as 'all' | PoidhChainKey); setVisibleCount(36); }}>
-            <option value="all">All chains</option>
-            {CHAIN_ORDER.map((key) => <option key={key} value={key}>{POIDH_CHAINS[key].name}</option>)}
-          </select>
-          <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setVisibleCount(36); }}>
-            {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-          <input value={query} onChange={(e) => { setQuery(e.target.value); setVisibleCount(36); }} placeholder="Search title, owner, token ID…" />
-          <span className="pill">{filteredTokens.length.toLocaleString()} shown</span>
+        <div className="marketStats">
+          <button className="statChip" type="button" onClick={() => { setStatusFilter('all'); resetVisible(); }}><b>{loadedTotal.toLocaleString()}</b><span>all claims</span></button>
+          <button className="statChip" type="button" onClick={() => { setStatusFilter('accepted'); resetVisible(); }}><b>{marketStats.accepted.toLocaleString()}</b><span>accepted</span></button>
+          <button className="statChip" type="button" onClick={() => { setStatusFilter('escrow'); resetVisible(); }}><b>{marketStats.escrow.toLocaleString()}</b><span>escrow</span></button>
+          <button className="statChip" type="button" onClick={() => { setStatusFilter('voting'); resetVisible(); }}><b>{marketStats.voting.toLocaleString()}</b><span>voting</span></button>
+          <button className="statChip" type="button" onClick={() => { setMediaFilter('cached'); resetVisible(); }}><b>{marketStats.cached.toLocaleString()}</b><span>R2 cached</span></button>
+          <button className="statChip" type="button" onClick={() => { setMediaFilter('missing'); resetVisible(); }}><b>{marketStats.missing.toLocaleString()}</b><span>no media</span></button>
+        </div>
+
+        <div className="card filters advancedFilters">
+          <div className="filterField wide">
+            <label>Search</label>
+            <input value={query} onChange={(e) => { setQuery(e.target.value); resetVisible(); }} placeholder="Title, description, owner, issuer, bounty, token…" />
+          </div>
+          <div className="filterField">
+            <label>Chain</label>
+            <select value={marketChain} onChange={(e) => { setMarketChain(e.target.value as 'all' | PoidhChainKey); resetVisible(); }}>
+              <option value="all">All chains</option>
+              {CHAIN_ORDER.map((key) => <option key={key} value={key}>{POIDH_CHAINS[key].name}</option>)}
+            </select>
+          </div>
+          <div className="filterField">
+            <label>Claim state</label>
+            <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); resetVisible(); }}>
+              {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </div>
+          <div className="filterField">
+            <label>Media</label>
+            <select value={mediaFilter} onChange={(e) => { setMediaFilter(e.target.value as MediaFilter); resetVisible(); }}>
+              {Object.entries(mediaLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </div>
+          <div className="filterField">
+            <label>Sort</label>
+            <select value={sortMode} onChange={(e) => { setSortMode(e.target.value as SortMode); resetVisible(); }}>
+              {Object.entries(sortLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </div>
+          <div className="filterField">
+            <label>Owner</label>
+            <input value={ownerFilter} onChange={(e) => { setOwnerFilter(e.target.value); resetVisible(); }} placeholder="0x owner…" />
+          </div>
+          <div className="filterField">
+            <label>Issuer</label>
+            <input value={issuerFilter} onChange={(e) => { setIssuerFilter(e.target.value); resetVisible(); }} placeholder="0x issuer…" />
+          </div>
+          <div className="filterField small">
+            <label>Bounty ID</label>
+            <input inputMode="numeric" value={bountyFilter} onChange={(e) => { setBountyFilter(e.target.value.replace(/\D/g, '')); resetVisible(); }} placeholder="any" />
+          </div>
+          <div className="filterField small">
+            <label>Token min</label>
+            <input inputMode="numeric" value={tokenMin} onChange={(e) => { setTokenMin(e.target.value.replace(/\D/g, '')); resetVisible(); }} placeholder="0" />
+          </div>
+          <div className="filterField small">
+            <label>Token max</label>
+            <input inputMode="numeric" value={tokenMax} onChange={(e) => { setTokenMax(e.target.value.replace(/\D/g, '')); resetVisible(); }} placeholder="∞" />
+          </div>
+          <button className="button" type="button" onClick={clearMarketFilters}>Clear</button>
+          <span className="pill resultPill">{filteredTokens.length.toLocaleString()} shown · {marketStats.owners.toLocaleString()} owners · {marketStats.bounties.toLocaleString()} bounties</span>
         </div>
         {tokensError ? <div className="notice error" style={{ marginTop: 14 }}>{tokensError}</div> : null}
         {tokensData?.errors?.length ? <div className="notice" style={{ marginTop: 14 }}>Partial indexer errors: {tokensData.errors.map((e) => `${e.chain}: ${e.error}`).join('; ')}</div> : null}
@@ -235,11 +385,16 @@ export default function Home() {
               <div className="nftBody">
                 <div className="nftMeta">
                   <span className="pill">{token.chainName} #{token.tokenId}</span>
-                  <span className={token.isAccepted ? 'status accepted' : 'status escrow'}>{token.isAccepted ? 'accepted' : 'escrow'}</span>
+                  <span className={token.isVoting ? 'status voting' : token.isAccepted ? 'status accepted' : 'status escrow'}>{token.isVoting ? 'voting' : token.isAccepted ? 'accepted' : 'escrow'}</span>
                 </div>
                 <h3>{token.title || `POIDH claim #${token.tokenId}`}</h3>
                 <p className="muted">{token.description || 'No description.'}</p>
+                <div className="cardFacts">
+                  <span>bounty #{token.bountyId}</span>
+                  <span>{token.cachedImageUrl ? 'R2 media' : token.url ? 'live media' : 'no media'}</span>
+                </div>
                 <div className="miniKv"><span>Owner</span><span>{compactAddress(token.owner)}</span></div>
+                <div className="miniKv"><span>Issuer</span><span>{compactAddress(token.issuer)}</span></div>
                 <div className="links">
                   <button className="button primary" type="button" onClick={() => inspectToken(token)}>Inspect</button>
                   <a className="button" href={token.explorerUrl} target="_blank" rel="noreferrer">Explorer</a>

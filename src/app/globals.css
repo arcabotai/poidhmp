@@ -56,7 +56,16 @@ select, input { width: 100%; border: 1px solid var(--line); background: rgba(0,0
 .kv span:first-child { color: var(--muted); }
 .notice { padding: 16px 18px; border-radius: 18px; background: rgba(216,167,93,.08); border: 1px solid rgba(216,167,93,.24); color: #f6dfb8; }
 .error { color: #ffd3d3; background: rgba(255,107,107,.1); border-color: rgba(255,107,107,.26); }
-.filters { padding: 14px; display:grid; grid-template-columns: 190px 210px 1fr auto; gap: 10px; align-items:center; }
+.marketStats { display:grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.statChip { text-align:left; border: 1px solid var(--line); border-radius: 18px; padding: 13px 14px; background: rgba(255,255,255,.035); color: var(--text); cursor:pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+.statChip:hover { transform: translateY(-1px); border-color: rgba(95,255,224,.42); background: rgba(95,255,224,.06); }
+.statChip b { display:block; font-size: 19px; line-height:1; }
+.statChip span { display:block; color: var(--muted); font-size: 12px; margin-top: 6px; }
+.filters { padding: 14px; display:grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; align-items:end; }
+.advancedFilters .wide { grid-column: span 2; }
+.filterField label { display:block; color:var(--muted); font-size:11px; margin:0 0 6px; text-transform:uppercase; letter-spacing:.1em; }
+.filterField.small input { text-align:center; }
+.resultPill { justify-content:center; white-space:nowrap; }
 .nftGrid { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
 .nftCard { overflow:hidden; display:flex; flex-direction:column; min-height: 430px; }
 .thumb { height: 210px; background: rgba(0,0,0,.3); display:flex; align-items:center; justify-content:center; border-bottom: 1px solid rgba(255,255,255,.08); }
@@ -69,9 +78,13 @@ select, input { width: 100%; border: 1px solid var(--line); background: rgba(0,0
 .status { border-radius:999px; padding: 7px 9px; font-size: 11px; text-transform:uppercase; letter-spacing:.08em; border:1px solid rgba(255,255,255,.1); }
 .status.accepted { color:#b9fff2; background:rgba(95,255,224,.08); border-color:rgba(95,255,224,.22); }
 .status.escrow { color:#f9dab0; background:rgba(216,167,93,.08); border-color:rgba(216,167,93,.22); }
-.miniKv { display:flex; justify-content:space-between; gap:12px; color: var(--muted); font-size: 13px; border-top:1px solid rgba(255,255,255,.07); padding-top:10px; margin-top:auto; }
+.status.voting { color:#d9ccff; background:rgba(168,85,247,.1); border-color:rgba(168,85,247,.28); }
+.cardFacts { display:flex; flex-wrap:wrap; gap: 6px; margin: 10px 0 4px; }
+.cardFacts span { border: 1px solid rgba(255,255,255,.08); color: #c9dfdc; background: rgba(0,0,0,.18); border-radius:999px; padding: 6px 8px; font-size: 11px; }
+.miniKv { display:flex; justify-content:space-between; gap:12px; color: var(--muted); font-size: 13px; border-top:1px solid rgba(255,255,255,.07); padding-top:10px; }
+.miniKv:first-of-type { margin-top:auto; }
 .loadMore { display:flex; justify-content:center; margin-top:18px; }
 .footer { margin-top: 32px; color: var(--muted); font-size: 13px; text-align:center; }
-@media (max-width: 1100px) { .nftGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1100px) { .nftGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } .marketStats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .advancedFilters .wide { grid-column: span 3; } }
 @media (max-width: 900px) { .hero, .result { grid-template-columns: 1fr; } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lookup { grid-template-columns: 1fr; } .nftGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .grid, .formRow, .filters, .nftGrid { grid-template-columns: 1fr; } .heroMain { padding: 24px; } .container { padding: 18px 12px 42px; } .thumb { height: 240px; } }
+@media (max-width: 560px) { .grid, .formRow, .filters, .marketStats, .nftGrid { grid-template-columns: 1fr; } .advancedFilters .wide { grid-column: auto; } .heroMain { padding: 24px; } .container { padding: 18px 12px 42px; } .thumb { height: 240px; } }
