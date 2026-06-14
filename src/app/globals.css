@@ -61,6 +61,7 @@ select, input { width: 100%; border: 1px solid var(--line); background: rgba(0,0
 .nftCard { overflow:hidden; display:flex; flex-direction:column; min-height: 430px; }
 .thumb { height: 210px; background: rgba(0,0,0,.3); display:flex; align-items:center; justify-content:center; border-bottom: 1px solid rgba(255,255,255,.08); }
 .thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.thumbBroken::after { content: 'Image unavailable'; color: var(--muted); font-size: 13px; }
 .nftBody { padding: 14px; display:flex; flex-direction:column; flex:1; }
 .nftBody h3 { margin: 12px 0 8px; font-size: 20px; line-height: 1.08; letter-spacing: -.03em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .nftBody p { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 4.5em; }

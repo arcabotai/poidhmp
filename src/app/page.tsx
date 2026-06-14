@@ -75,7 +75,7 @@ export default function Home() {
   const [marketChain, setMarketChain] = useState<'all' | PoidhChainKey>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [query, setQuery] = useState('');
-  const [visibleCount, setVisibleCount] = useState(72);
+  const [visibleCount, setVisibleCount] = useState(36);
 
   const chain = POIDH_CHAINS[chainKey];
   const quickIds = useMemo(() => featuredIds[chainKey], [chainKey]);
@@ -201,14 +201,14 @@ export default function Home() {
           <p className="muted">Loaded from Railway-hosted POIDH indexer. Cached for 5 minutes by POIDHMP.</p>
         </div>
         <div className="card filters">
-          <select value={marketChain} onChange={(e) => { setMarketChain(e.target.value as 'all' | PoidhChainKey); setVisibleCount(72); }}>
+          <select value={marketChain} onChange={(e) => { setMarketChain(e.target.value as 'all' | PoidhChainKey); setVisibleCount(36); }}>
             <option value="all">All chains</option>
             {CHAIN_ORDER.map((key) => <option key={key} value={key}>{POIDH_CHAINS[key].name}</option>)}
           </select>
-          <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setVisibleCount(72); }}>
+          <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setVisibleCount(36); }}>
             {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <input value={query} onChange={(e) => { setQuery(e.target.value); setVisibleCount(72); }} placeholder="Search title, owner, token ID…" />
+          <input value={query} onChange={(e) => { setQuery(e.target.value); setVisibleCount(36); }} placeholder="Search title, owner, token ID…" />
           <span className="pill">{filteredTokens.length.toLocaleString()} shown</span>
         </div>
         {tokensError ? <div className="notice error" style={{ marginTop: 14 }}>{tokensError}</div> : null}
@@ -218,7 +218,18 @@ export default function Home() {
           {filteredTokens.slice(0, visibleCount).map((token) => (
             <article className="card nftCard" key={`${token.chainKey}-${token.tokenId}`}>
               <div className="thumb">
-                {token.url ? <img src={`/api/media?url=${encodeURIComponent(token.url)}`} alt={token.title || `POIDH #${token.tokenId}`} loading="lazy" /> : <span className="muted">No image</span>}
+                {token.url ? (
+                  <img
+                    src={`/api/media?url=${encodeURIComponent(token.url)}`}
+                    alt={token.title || `POIDH #${token.tokenId}`}
+                    loading="lazy"
+                    onLoad={(event) => event.currentTarget.parentElement?.classList.remove('thumbBroken')}
+                    onError={(event) => {
+                      event.currentTarget.style.display = 'none';
+                      event.currentTarget.parentElement?.classList.add('thumbBroken');
+                    }}
+                  />
+                ) : <span className="muted">No image</span>}
               </div>
               <div className="nftBody">
                 <div className="nftMeta">
@@ -239,7 +250,7 @@ export default function Home() {
         </div>
         {filteredTokens.length > visibleCount ? (
           <div className="loadMore">
-            <button className="button primary" type="button" onClick={() => setVisibleCount((count) => count + 72)}>Load more NFTs</button>
+            <button className="button primary" type="button" onClick={() => setVisibleCount((count) => count + 36)}>Load more NFTs</button>
           </div>
         ) : null}
       </section>
