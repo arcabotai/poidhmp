@@ -34,7 +34,10 @@ type MarketplaceToken = {
   bountyId: number;
   owner: string;
   cachedImageUrl?: string;
-  mintStatus: 'minted' | 'indexed-only' | 'unknown';
+  nftStatus: 'v3-nft' | 'legacy-claim' | 'unknown';
+  protocolVersion: 'v3' | 'legacy' | 'unknown';
+  nftOwner?: string;
+  mintStatus?: 'minted' | 'indexed-only' | 'unknown';
   mintedOwner?: string;
   explorerUrl: string;
   openseaUrl?: string;
@@ -49,6 +52,8 @@ type TokensResponse = {
   imageCache?: { enabled: boolean; generatedAt?: string; totalCached?: number; totalFailed?: number };
   errors: { chain: string; error: string }[];
   mintStatusCache?: { enabled: boolean; generatedAt?: string; totalChecked?: number; totalMinted?: number; totalIndexedOnly?: number; totalUnknown?: number };
+  nftStatusCache?: { enabled: boolean; generatedAt?: string; totalChecked?: number; totalV3Nft?: number; totalLegacyClaim?: number; totalUnknown?: number };
+  stats?: { byNftStatus?: Record<string, number>; byProtocolVersion?: Record<string, number> };
   tokens: MarketplaceToken[];
 };
 
@@ -73,11 +78,11 @@ const mediaLabels = {
   missing: 'No media URL',
 } as const;
 
-const mintLabels = {
-  all: 'All records',
-  minted: 'Minted NFTs',
-  indexed: 'Indexed claims only',
-  unknown: 'Mint status unknown',
+const nftLabels = {
+  all: 'All POIDH claims',
+  v3: 'V3 claim NFTs',
+  legacy: 'Legacy / indexed claims',
+  unknown: 'Needs verification',
 } as const;
 
 const sortLabels = {
@@ -94,7 +99,7 @@ const sortLabels = {
 
 type StatusFilter = keyof typeof statusLabels;
 type MediaFilter = keyof typeof mediaLabels;
-type MintFilter = keyof typeof mintLabels;
+type NftFilter = keyof typeof nftLabels;
 type SortMode = keyof typeof sortLabels;
 
 function hasUsableMediaUrl(token: MarketplaceToken) {
@@ -121,7 +126,7 @@ export default function Home() {
   const [marketChain, setMarketChain] = useState<'all' | PoidhChainKey>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
-  const [mintFilter, setMintFilter] = useState<MintFilter>('all');
+  const [nftFilter, setNftFilter] = useState<NftFilter>('all');
   const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [query, setQuery] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('');
@@ -165,9 +170,9 @@ export default function Home() {
       cached: tokens.filter((token) => token.cachedImageUrl).length,
       fallback: tokens.filter((token) => !token.cachedImageUrl && hasUsableMediaUrl(token)).length,
       missing: tokens.filter((token) => !hasUsableMediaUrl(token)).length,
-      minted: tokens.filter((token) => token.mintStatus === 'minted').length,
-      indexedOnly: tokens.filter((token) => token.mintStatus === 'indexed-only').length,
-      unknownMint: tokens.filter((token) => token.mintStatus === 'unknown').length,
+      v3Nfts: tokens.filter((token) => token.nftStatus === 'v3-nft').length,
+      legacyClaims: tokens.filter((token) => token.nftStatus === 'legacy-claim').length,
+      unknownNft: tokens.filter((token) => token.nftStatus === 'unknown').length,
       owners: new Set(tokens.map((token) => token.owner?.toLowerCase()).filter(Boolean)).size,
       issuers: new Set(tokens.map((token) => token.issuer?.toLowerCase()).filter(Boolean)).size,
       bounties: new Set(tokens.map((token) => `${token.chainId}:${token.bountyId}`)).size,
@@ -190,9 +195,9 @@ export default function Home() {
       if (mediaFilter === 'cached' && !token.cachedImageUrl) return false;
       if (mediaFilter === 'fallback' && (token.cachedImageUrl || !hasUsableMediaUrl(token))) return false;
       if (mediaFilter === 'missing' && hasUsableMediaUrl(token)) return false;
-      if (mintFilter === 'minted' && token.mintStatus !== 'minted') return false;
-      if (mintFilter === 'indexed' && token.mintStatus !== 'indexed-only') return false;
-      if (mintFilter === 'unknown' && token.mintStatus !== 'unknown') return false;
+      if (nftFilter === 'v3' && token.nftStatus !== 'v3-nft') return false;
+      if (nftFilter === 'legacy' && token.nftStatus !== 'legacy-claim') return false;
+      if (nftFilter === 'unknown' && token.nftStatus !== 'unknown') return false;
       if (owner && !token.owner?.toLowerCase().includes(owner)) return false;
       if (issuer && !token.issuer?.toLowerCase().includes(issuer)) return false;
       if (bounty && String(token.bountyId) !== bounty) return false;
@@ -227,13 +232,13 @@ export default function Home() {
           return b.onChainId - a.onChainId;
       }
     });
-  }, [bountyFilter, issuerFilter, marketChain, mediaFilter, mintFilter, ownerFilter, query, sortMode, statusFilter, tokenMax, tokenMin, tokensData]);
+  }, [bountyFilter, issuerFilter, marketChain, mediaFilter, nftFilter, ownerFilter, query, sortMode, statusFilter, tokenMax, tokenMin, tokensData]);
 
   function clearMarketFilters() {
     setMarketChain('all');
     setStatusFilter('all');
     setMediaFilter('all');
-    setMintFilter('all');
+    setNftFilter('all');
     setSortMode('newest');
     setQuery('');
     setOwnerFilter('');
@@ -287,7 +292,7 @@ export default function Home() {
           </div>
         </div>
         <aside className="card side">
-          <div className="stat"><b>{tokensLoading ? '…' : loadedTotal.toLocaleString()}</b><span>claim NFTs from official indexer</span></div>
+          <div className="stat"><b>{tokensLoading ? '…' : loadedTotal.toLocaleString()}</b><span>POIDH claims cached by POIDHMP</span></div>
           <div className="stat"><b>{tokensLoading ? '…' : acceptedTotal.toLocaleString()}</b><span>accepted / user-owned claims</span></div>
           <div className="stat"><b>4</b><span>chains indexed</span></div>
           <div className="notice">Still no custody and no fake listings. This is the real inventory layer before native sales.</div>
@@ -300,7 +305,7 @@ export default function Home() {
             <div className="kicker">canonical contracts</div>
             <h2>Claim NFT collections</h2>
           </div>
-          <p className="muted">Contracts confirmed by Kenny. NFT inventory fetched from `https://indexer.poidh.xyz/claim/:chainId`.</p>
+          <p className="muted">Contracts confirmed by Kenny. Claim records are cached from `https://indexer.poidh.xyz/claim/:chainId`, then checked against these v3 NFT contracts.</p>
         </div>
         <div className="grid">
           {CHAIN_ORDER.map((key) => {
@@ -327,17 +332,17 @@ export default function Home() {
         <div className="sectionHead">
           <div>
             <div className="kicker">official indexer inventory</div>
-            <h2>Browse all POIDH NFTs</h2>
+            <h2>Browse POIDH claims</h2>
           </div>
-          <p className="muted">Loaded from Railway-hosted POIDH indexer. Cached for 5 minutes by POIDHMP.</p>
+          <p className="muted">Loaded from POIDHMP's Railway-backed cache, with v3 NFT vs legacy claim status separated.</p>
         </div>
         <div className="marketStats">
           <button className="statChip" type="button" onClick={() => { setStatusFilter('all'); resetVisible(); }}><b>{loadedTotal.toLocaleString()}</b><span>all claims</span></button>
           <button className="statChip" type="button" onClick={() => { setStatusFilter('accepted'); resetVisible(); }}><b>{marketStats.accepted.toLocaleString()}</b><span>accepted</span></button>
           <button className="statChip" type="button" onClick={() => { setStatusFilter('escrow'); resetVisible(); }}><b>{marketStats.escrow.toLocaleString()}</b><span>escrow</span></button>
           <button className="statChip" type="button" onClick={() => { setStatusFilter('voting'); resetVisible(); }}><b>{marketStats.voting.toLocaleString()}</b><span>voting</span></button>
-          <button className="statChip" type="button" onClick={() => { setMintFilter('minted'); resetVisible(); }}><b>{marketStats.minted.toLocaleString()}</b><span>minted NFTs</span></button>
-          <button className="statChip" type="button" onClick={() => { setMintFilter('indexed'); resetVisible(); }}><b>{marketStats.indexedOnly.toLocaleString()}</b><span>indexed only</span></button>
+          <button className="statChip" type="button" onClick={() => { setNftFilter('v3'); resetVisible(); }}><b>{marketStats.v3Nfts.toLocaleString()}</b><span>V3 NFTs</span></button>
+          <button className="statChip" type="button" onClick={() => { setNftFilter('legacy'); resetVisible(); }}><b>{marketStats.legacyClaims.toLocaleString()}</b><span>legacy / indexed</span></button>
         </div>
 
         <div className="card filters advancedFilters">
@@ -365,9 +370,9 @@ export default function Home() {
             </select>
           </div>
           <div className="filterField">
-            <label>NFT status</label>
-            <select value={mintFilter} onChange={(e) => { setMintFilter(e.target.value as MintFilter); resetVisible(); }}>
-              {Object.entries(mintLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            <label>Claim type</label>
+            <select value={nftFilter} onChange={(e) => { setNftFilter(e.target.value as NftFilter); resetVisible(); }}>
+              {Object.entries(nftLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </div>
           <div className="filterField">
@@ -428,14 +433,14 @@ export default function Home() {
                 <p className="muted">{token.description || 'No description.'}</p>
                 <div className="cardFacts">
                   <span>bounty #{token.bountyId}</span>
-                  <span className={`mintBadge ${token.mintStatus}`}>{token.mintStatus === 'minted' ? 'minted NFT' : token.mintStatus === 'indexed-only' ? 'indexed claim' : 'mint unknown'}</span>
+                  <span className={`nftBadge ${token.nftStatus}`}>{token.nftStatus === 'v3-nft' ? 'V3 NFT' : token.nftStatus === 'legacy-claim' ? 'legacy / indexed claim' : 'needs verification'}</span>
                   <span>{token.cachedImageUrl ? 'R2 media' : hasUsableMediaUrl(token) ? 'live media' : 'no media'}</span>
                 </div>
                 <div className="miniKv"><span>Owner</span><span>{compactAddress(token.owner)}</span></div>
                 <div className="miniKv"><span>Issuer</span><span>{compactAddress(token.issuer)}</span></div>
                 <div className="links">
                   <button className="button primary" type="button" onClick={() => inspectToken(token)}>Inspect</button>
-                  <a className="button" href={token.explorerUrl} target="_blank" rel="noreferrer">Contract</a>
+                  <a className="button" href={token.explorerUrl} target="_blank" rel="noreferrer">{token.nftStatus === 'v3-nft' ? 'Token' : 'Contract'}</a>
                 </div>
               </div>
             </article>
@@ -443,7 +448,7 @@ export default function Home() {
         </div>
         {filteredTokens.length > visibleCount ? (
           <div className="loadMore">
-            <button className="button primary" type="button" onClick={() => setVisibleCount((count) => count + 36)}>Load more NFTs</button>
+            <button className="button primary" type="button" onClick={() => setVisibleCount((count) => count + 36)}>Load more claims</button>
           </div>
         ) : null}
       </section>

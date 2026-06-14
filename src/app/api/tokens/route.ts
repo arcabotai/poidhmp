@@ -27,6 +27,9 @@ type MarketplaceToken = IndexerClaim & {
   cachedImageUrl?: string;
   explorerUrl: string;
   openseaUrl?: string;
+  nftStatus: 'v3-nft' | 'legacy-claim' | 'unknown';
+  protocolVersion: 'v3' | 'legacy' | 'unknown';
+  nftOwner?: string;
   mintStatus: 'minted' | 'indexed-only' | 'unknown';
   mintedOwner?: string;
 };
@@ -46,6 +49,29 @@ type MintStatusManifest = {
   totalUnknown?: number;
   records?: Record<string, { status?: 'minted' | 'indexed-only' | 'unknown'; owner?: string; error?: string }>;
 };
+
+async function proxyRailwayApi(request: Request) {
+  const apiBase = process.env.POIDHMP_API_BASE_URL?.replace(/\/$/, '');
+  if (!apiBase) return null;
+
+  try {
+    const upstream = new URL(`${apiBase}/tokens`);
+    const incoming = new URL(request.url);
+    incoming.searchParams.forEach((value, key) => upstream.searchParams.set(key, value));
+
+    const response = await fetch(upstream, {
+      headers: { accept: 'application/json', 'user-agent': 'poidhmp-web/0.5' },
+      next: { revalidate },
+    });
+    const data = await response.json();
+    return NextResponse.json(data, {
+      status: response.status,
+      headers: { 'x-poidhmp-source': 'railway' },
+    });
+  } catch {
+    return null;
+  }
+}
 
 async function fetchImageManifest(): Promise<ImageManifest | null> {
   const baseUrl = process.env.R2_PUBLIC_BASE_URL?.replace(/\/$/, '');
@@ -103,6 +129,9 @@ async function fetchChainClaims(chainKey: PoidhChainKey, manifest: ImageManifest
       chainName: chain.shortName,
       tokenId,
       cachedImageUrl,
+      nftStatus: mintRecord?.status === 'minted' ? 'v3-nft' : mintRecord?.status === 'indexed-only' ? 'legacy-claim' : 'unknown',
+      protocolVersion: mintRecord?.status === 'minted' ? 'v3' : mintRecord?.status === 'indexed-only' ? 'legacy' : 'unknown',
+      nftOwner: mintRecord?.owner,
       mintStatus: mintRecord?.status ?? 'unknown',
       mintedOwner: mintRecord?.owner,
       explorerUrl: explorerAddressUrl(chain),
@@ -116,6 +145,9 @@ function newestFirst(a: MarketplaceToken, b: MarketplaceToken) {
 }
 
 export async function GET(request: Request) {
+  const proxied = await proxyRailwayApi(request);
+  if (proxied) return proxied;
+
   const { searchParams } = new URL(request.url);
   const chainParam = searchParams.get('chain');
   const acceptedParam = searchParams.get('accepted');

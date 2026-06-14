@@ -9,7 +9,9 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "sync:images": "node scripts/sync-poidh-images.mjs",
-    "sync:mint-status": "node scripts/sync-poidh-mint-status.mjs"
+    "sync:mint-status": "node scripts/sync-poidh-mint-status.mjs",
+    "api:start": "node apps/api/src/index.mjs",
+    "api:sync-once": "POIDHMP_SYNC_ONCE=1 node apps/api/src/index.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1068.0",
