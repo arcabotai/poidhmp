@@ -21,6 +21,9 @@ const limitArg = Number(args.get('--limit') ?? 0);
 const concurrency = Number(args.get('--concurrency') ?? 8);
 const force = args.has('--force');
 const dryRun = args.has('--dry-run');
+const fetchTimeoutMs = Number(args.get('--fetch-timeout-ms') ?? 30_000);
+const itemTimeoutMs = Number(args.get('--item-timeout-ms') ?? 90_000);
+const maxImageBytes = Number(args.get('--max-image-bytes') ?? 30_000_000);
 
 const required = ['CLOUDFLARE_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET', 'R2_PUBLIC_BASE_URL'];
 for (const name of required) {
@@ -48,17 +51,36 @@ function resolveUri(value) {
 }
 
 async function fetchJson(url) {
-  const response = await fetch(url, { headers: { accept: 'application/json,*/*', 'user-agent': 'poidhmp-image-sync/0.1' } });
+  const signal = AbortSignal.timeout(fetchTimeoutMs);
+  const response = await fetch(url, { signal, headers: { accept: 'application/json,*/*', 'user-agent': 'poidhmp-image-sync/0.1' } });
   if (!response.ok) throw new Error(`fetch ${response.status}`);
   return response.json();
 }
 
 async function fetchBuffer(url) {
-  const response = await fetch(url, { headers: { accept: 'image/*,*/*', 'user-agent': 'poidhmp-image-sync/0.1' } });
+  const signal = AbortSignal.timeout(fetchTimeoutMs);
+  const response = await fetch(url, { signal, headers: { accept: 'image/*,*/*', 'user-agent': 'poidhmp-image-sync/0.1' } });
   if (!response.ok) throw new Error(`image fetch ${response.status}`);
+  const contentLength = Number(response.headers.get('content-length') || 0);
+  if (contentLength > maxImageBytes) throw new Error(`image too large: ${contentLength} bytes`);
   const contentType = response.headers.get('content-type') || '';
   const buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.byteLength > maxImageBytes) throw new Error(`image too large: ${buffer.byteLength} bytes`);
   return { buffer, contentType };
+}
+
+async function withTimeout(promise, ms, label) {
+  let timeout;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function objectExists(key) {
@@ -146,13 +168,13 @@ async function main() {
 
   await Promise.all(claims.map((claim) => limiter(async () => {
     try {
-      const result = await cacheClaim(claim);
+      const result = await withTimeout(cacheClaim(claim), itemTimeoutMs, `${claim.chainId}:${claim.onChainId}`);
       results.push(result);
     } catch (error) {
       results.push({ ok: false, chainId: claim.chainId, tokenId: String(claim.onChainId), error: error instanceof Error ? error.message : String(error) });
     } finally {
       done += 1;
-      if (done % 25 === 0 || done === claims.length) {
+      if (done % 10 === 0 || done === claims.length) {
         const ok = results.filter((r) => r.ok).length;
         const failed = results.filter((r) => !r.ok).length;
         console.log(`progress ${done}/${claims.length} ok=${ok} failed=${failed}`);
