@@ -343,7 +343,8 @@ function filteredClaims(url) {
   const protocolVersion = params.get('protocolVersion') || params.get('version');
   const state = params.get('state');
   const q = (params.get('q') || params.get('search') || '').trim().toLowerCase();
-  const limit = Math.min(Number(params.get('limit') || 0) || cache.claims.length, 5000);
+  const requestedLimit = Number(params.get('limit') || 0) || cache.claims.length;
+  const limit = Math.min(requestedLimit, 20000);
   const offset = Math.max(Number(params.get('offset') || 0) || 0, 0);
 
   const claims = cache.claims.filter((claim) => {

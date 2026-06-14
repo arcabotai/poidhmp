@@ -282,13 +282,13 @@ export default function Home() {
           <div className="kicker">poidh marketplace / claim NFT discovery</div>
           <h1>pics sold, or it didn’t happen.</h1>
           <p className="subtitle">
-            A clean market surface for POIDH v3 claim NFTs. Now backed by Kenny’s official indexer at indexer.poidh.xyz, not random RPC archaeology.
+            A clean market surface for POIDH claims, separating confirmed v3 claim NFTs from legacy/indexed records without random RPC archaeology.
           </p>
           <div className="nav">
-            <a className="button primary" href="#market">Browse NFTs</a>
+            <a className="button primary" href="#market">Browse claims</a>
             <a className="button" href="#lookup">Look up NFT</a>
             <a className="button" href="https://indexer.poidh.xyz/swagger" target="_blank" rel="noreferrer">Indexer API</a>
-            <span className="pill">{tokensLoading ? 'loading…' : `${loadedTotal.toLocaleString()} indexed NFTs`}</span>
+            <span className="pill">{tokensLoading ? 'loading…' : `${loadedTotal.toLocaleString()} indexed claims`}</span>
           </div>
         </div>
         <aside className="card side">
