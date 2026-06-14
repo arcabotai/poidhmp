@@ -33,6 +33,7 @@ type MarketplaceToken = {
   isVoting: boolean;
   bountyId: number;
   owner: string;
+  cachedImageUrl?: string;
   explorerUrl: string;
   openseaUrl?: string;
 };
@@ -218,9 +219,9 @@ export default function Home() {
           {filteredTokens.slice(0, visibleCount).map((token) => (
             <article className="card nftCard" key={`${token.chainKey}-${token.tokenId}`}>
               <div className="thumb">
-                {token.url ? (
+                {token.cachedImageUrl || token.url ? (
                   <img
-                    src={`/api/media?url=${encodeURIComponent(token.url)}`}
+                    src={token.cachedImageUrl || `/api/media?url=${encodeURIComponent(token.url ?? '')}`}
                     alt={token.title || `POIDH #${token.tokenId}`}
                     loading="lazy"
                     onLoad={(event) => event.currentTarget.parentElement?.classList.remove('thumbBroken')}

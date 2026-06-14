@@ -24,11 +24,35 @@ type MarketplaceToken = IndexerClaim & {
   chainKey: PoidhChainKey;
   chainName: string;
   tokenId: string;
+  cachedImageUrl?: string;
   explorerUrl: string;
   openseaUrl?: string;
 };
 
-async function fetchChainClaims(chainKey: PoidhChainKey): Promise<MarketplaceToken[]> {
+type ImageManifest = {
+  generatedAt?: string;
+  totalCached?: number;
+  totalFailed?: number;
+  images?: Record<string, { url?: string }>;
+};
+
+async function fetchImageManifest(): Promise<ImageManifest | null> {
+  const baseUrl = process.env.R2_PUBLIC_BASE_URL?.replace(/\/$/, '');
+  if (!baseUrl) return null;
+
+  try {
+    const response = await fetch(`${baseUrl}/poidh/v1/manifest.json`, {
+      headers: { accept: 'application/json', 'user-agent': 'poidhmp/0.3' },
+      next: { revalidate },
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as ImageManifest;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchChainClaims(chainKey: PoidhChainKey, manifest: ImageManifest | null): Promise<MarketplaceToken[]> {
   const chain = POIDH_CHAINS[chainKey];
   const response = await fetch(`${INDEXER_BASE_URL}/claim/${chain.chainId}`, {
     headers: { accept: 'application/json', 'user-agent': 'poidhmp/0.2' },
@@ -43,11 +67,13 @@ async function fetchChainClaims(chainKey: PoidhChainKey): Promise<MarketplaceTok
 
   return claims.map((claim) => {
     const tokenId = String(claim.onChainId);
+    const cachedImageUrl = manifest?.images?.[`${claim.chainId}:${tokenId}`]?.url;
     return {
       ...claim,
       chainKey,
       chainName: chain.shortName,
       tokenId,
+      cachedImageUrl,
       explorerUrl: explorerTokenUrl(chain, tokenId),
       openseaUrl: openseaAssetUrl(chain, tokenId),
     };
@@ -73,7 +99,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const settled = await Promise.allSettled(selectedChains.map(fetchChainClaims));
+    const manifest = await fetchImageManifest();
+    const settled = await Promise.allSettled(selectedChains.map((key) => fetchChainClaims(key, manifest)));
     const tokens = settled.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
     const errors = settled.flatMap((result, index) =>
       result.status === 'rejected'
@@ -97,6 +124,9 @@ export async function GET(request: Request) {
       total: filtered.length,
       totalUnfiltered: tokens.length,
       countsByChain,
+      imageCache: manifest
+        ? { enabled: true, generatedAt: manifest.generatedAt, totalCached: manifest.totalCached, totalFailed: manifest.totalFailed }
+        : { enabled: false },
       errors,
       tokens: filtered,
     });
