@@ -91,13 +91,14 @@ export function explorerAddressUrl(chain: PoidhChain, address = chain.nftAddress
 }
 
 export function explorerTokenUrl(chain: PoidhChain, tokenId?: string) {
+  const base = `${chain.explorerBase}${chain.explorerTokenPath ?? '/token/'}${chain.nftAddress}`;
+  if (!tokenId) return base;
+
   if (chain.key === 'degen') {
-    const base = `${chain.explorerBase}${chain.explorerTokenPath ?? '/token/'}${chain.nftAddress}`;
-    return tokenId ? `${base}/instance/${tokenId}` : base;
+    return `${base}/instance/${tokenId}`;
   }
-  return tokenId
-    ? `${chain.explorerBase}/nft/${chain.nftAddress}/${tokenId}`
-    : explorerAddressUrl(chain);
+
+  return `${base}?a=${encodeURIComponent(tokenId)}`;
 }
 
 export function openseaAssetUrl(chain: PoidhChain, tokenId: string) {
